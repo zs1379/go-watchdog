@@ -18,12 +18,18 @@ const (
 	configPath = "/etc/xyDog.conf"
 )
 
+type processStruct struct {
+	dir        string
+	dirAndName string
+	log        string
+	num        int
+}
+
 var (
 	logFile     string
 	slowTime    int64
 	pidDir      string
-	baseDir     string
-	programList map[string]int
+	processList map[string]processStruct
 )
 
 func main() {
@@ -41,7 +47,7 @@ func main() {
 	logOption := log4go.NewFileLogWriter(logFile, false)
 	log4go.AddFilter("file", log4go.FINE, logOption)
 
-	for processName, processNum := range programList {
+	for processName, processStruct := range processList {
 		command := fmt.Sprintf("ps -ax | grep -v 'grep' | grep '%s' | awk '{print $1}'", processName)
 
 		out, err := exec.Command("/bin/sh", "-c", command).Output()
@@ -51,7 +57,7 @@ func main() {
 		}
 
 		//程序的路径,检测shell文件状态
-		filepath := fmt.Sprintf(baseDir+"%s", processName)
+		filepath := fmt.Sprintf(processStruct.dirAndName)
 
 		finfo, err := os.Stat(filepath)
 
@@ -68,9 +74,9 @@ func main() {
 		splitOut := strings.Fields(fmt.Sprintf("%s", out))
 
 		//检测是否存在该进程，如果不存在则启动它，可能为首次启动～
-		if len(splitOut) < processNum {
+		if len(splitOut) < processStruct.num {
 			//根据缺少的进程数启动相应数目的进程
-			subLen := processNum - len(splitOut)
+			subLen := processStruct.num - len(splitOut)
 
 			for i := 0; i < subLen; i++ {
 				log4go.Info(fmt.Sprintf("检测到进程不足，开始启动:%s", processName))
@@ -167,7 +173,7 @@ func startProcess(processName string) bool {
 	}
 
 	//打开文件
-	f, err := os.OpenFile(baseDir+"log/nohup_shell.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
+	f, err := os.OpenFile(processList[processName].log, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
 	if err != nil {
 		log4go.Error(fmt.Sprintf("打开文件异常:%s", err))
 	}
@@ -176,7 +182,7 @@ func startProcess(processName string) bool {
 
 	cmd.Stdout = f
 	cmd.Stderr = f
-	cmd.Dir = baseDir
+	cmd.Dir = processList[processName].dir
 
 	err = cmd.Start()
 
@@ -282,25 +288,26 @@ func getConfig() {
 		panic(fmt.Sprintf("缺少pidDir配置，程序强制退出"))
 	}
 
-	//相关shell所使用的目录所在位置
-	baseDir = configMap["baseDir"]
-
-	if len(baseDir) == 0 {
-		panic(fmt.Sprintf("缺少baseDir配置，程序强制退出"))
-	}
-
-	programList = make(map[string]int)
+	processList = make(map[string]processStruct)
 
 	for key, value := range configMap {
 		num := strings.LastIndex(key, ".sh")
 		if num != -1 {
-			intValue, err := strconv.ParseInt(value, 10, 0)
+			numAndLog := strings.Split(value, ">>")
+
+			intValue, err := strconv.ParseInt(strings.TrimSpace(numAndLog[0]), 10, 0)
 
 			if err != nil {
 				panic(fmt.Sprintf("shell配置后必须为数目，程序强制退出:%s", err))
 			}
 
-			programList[key] = int(intValue)
+			nameLoc := strings.LastIndex(key, "/")
+
+			dir := strings.TrimSpace(key[0:nameLoc])
+
+			processName := strings.TrimSpace(key[nameLoc+1:])
+
+			processList[processName] = processStruct{dir, key, strings.TrimSpace(numAndLog[1]), int(intValue)}
 		}
 	}
 }
