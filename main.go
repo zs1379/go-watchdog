@@ -36,7 +36,9 @@ func main() {
 	//创建异常处理
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println(err)
+			log4go.Error(fmt.Sprintf("panic error:%s", err.(string)))
+
+			time.Sleep(10 * time.Millisecond)
 		}
 	}()
 
@@ -48,12 +50,12 @@ func main() {
 	log4go.AddFilter("file", log4go.FINE, logOption)
 
 	for processName, processStruct := range processList {
-		command := fmt.Sprintf("ps -ax | grep -v 'grep' | grep '%s' | awk '{print $1}'", processName)
+		command := fmt.Sprintf("ps ax | grep -v 'grep' | grep '%s%s' | awk '{print $1}'", processName, ".sh")
 
 		out, err := exec.Command("/bin/sh", "-c", command).Output()
 
 		if err != nil {
-			fmt.Println("命令执行失败:%s,错误代码:%s", command, err)
+			log4go.Error(fmt.Sprintf("命令执行失败:%s,错误代码:%s", command, err))
 		}
 
 		//程序的路径,检测shell文件状态
