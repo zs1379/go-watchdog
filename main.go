@@ -50,7 +50,7 @@ func main() {
 	log4go.AddFilter("file", log4go.FINE, logOption)
 
 	for processName, processStruct := range processList {
-		command := fmt.Sprintf("ps ax | grep -v 'grep' | grep '%s%s' | awk '{print $1}'", processName, ".sh")
+		command := fmt.Sprintf("ps ax | grep -v 'grep' | grep '%s%s' | awk '{print $1}'", "/bin/sh ", processName)
 
 		out, err := exec.Command("/bin/sh", "-c", command).Output()
 
