@@ -87,6 +87,42 @@ func main() {
 			}
 
 		} else {
+			//异常情况，进程比配置还多
+			if len(splitOut) > processStruct.num {
+				nowNum := len(splitOut)
+
+				for _, pid := range splitOut {
+					pid, err := strconv.Atoi(pid)
+
+					if err != nil {
+						log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processName, err))
+						continue
+					}
+
+					subLen := nowNum - processStruct.num
+
+					if subLen > 0 {
+						//获取进程结构体
+						killProcessStruct, err := os.FindProcess(pid)
+
+						//杀死进程
+						err = killProcessStruct.Kill()
+
+						if err != nil {
+							log4go.Error(fmt.Sprintf("进程过多中，杀死进程失败%d,程序为:%s,错误代码:%s", pid, processName, err))
+							continue
+						} else {
+							log4go.Info(fmt.Sprintf("进程过多中，杀死进程%d,程序为:%s", pid, processName))
+						}
+
+						nowNum -= 1
+					} else {
+						break
+					}
+
+				}
+			}
+
 			if len(splitOut) == 1 {
 				//进程已存在,检测相关进程是否正常，如果没有则进程可能已经挂掉了，得启动它
 				pid, err := strconv.Atoi(splitOut[0])
@@ -126,6 +162,7 @@ func main() {
 
 	log4go.Info("看门狗正常运行")
 
+	//为写入日志文件而停留一会儿
 	time.Sleep(10 * time.Millisecond)
 }
 
@@ -133,18 +170,31 @@ func main() {
  * 检测pid的文件是否存在并且时间符合要求
  */
 func startCheck(pid int, processName string) bool {
-	content, err := ioutil.ReadFile(fmt.Sprintf(pidDir+"%d", pid))
+	timeContent := ""
 
-	if err != nil {
-		log4go.Info(fmt.Sprintf("pid文件不存在%d,程序为:%s,错误为:%s", pid, processName, err))
-		return false
+	//由于有时候shell脚本写文件时读取文件可能造成空的情况，因此重试多次。
+	for i := 0; i < 3; i++ {
+		content, err := ioutil.ReadFile(fmt.Sprintf(pidDir+"%d", pid))
+
+		if err != nil {
+			log4go.Info(fmt.Sprintf("pid文件不存在%d,程序为:%s,错误为:%s", pid, processName, err))
+			return false
+		}
+
+		if len(content) != 0 {
+			timeContent = strings.Trim(fmt.Sprintf("%s", content), "\n")
+
+			break
+		}
+
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	//文件如果存在的话需要检测时间是否符合要求
-	fTime, err := strconv.ParseInt(strings.Trim(fmt.Sprintf("%s", content), "\n"), 10, 64)
+	fTime, err := strconv.ParseInt(timeContent, 10, 64)
 
 	if err != nil {
-		log4go.Info(fmt.Sprintf("文件内容无法转换,程序为:%s,错误为:%s", processName, err))
+		log4go.Info(fmt.Sprintf("文件内容无法转换,转换前为:%s,程序为:%s,错误为:%s", timeContent, processName, err))
 		return false
 	}
 
