@@ -21,6 +21,7 @@ const (
 type processStruct struct {
 	dir        string
 	dirAndName string
+	name       string
 	log        string
 	num        int
 }
@@ -49,8 +50,9 @@ func main() {
 	logOption := log4go.NewFileLogWriter(logFile, false)
 	log4go.AddFilter("file", log4go.FINE, logOption)
 
-	for processName, processStruct := range processList {
-		command := fmt.Sprintf("ps ax | grep -v 'grep' | grep '%s%s' | awk '{print $1}'", "/bin/sh ", processName)
+	for _, processStruct := range processList {
+
+		command := fmt.Sprintf("ps ax | grep -v 'grep' | grep '%s%s' | awk '{print $1}'", "/bin/sh ", processStruct.dirAndName)
 
 		out, err := exec.Command("/bin/sh", "-c", command).Output()
 
@@ -58,18 +60,15 @@ func main() {
 			log4go.Error(fmt.Sprintf("命令执行失败:%s,错误代码:%s", command, err))
 		}
 
-		//程序的路径,检测shell文件状态
-		filepath := fmt.Sprintf(processStruct.dirAndName)
-
-		finfo, err := os.Stat(filepath)
+		finfo, err := os.Stat(processStruct.dirAndName)
 
 		if err != nil {
-			log4go.Error(fmt.Sprintf("无法找到shell文件:%s", filepath))
+			log4go.Error(fmt.Sprintf("无法找到shell文件:%s", processStruct.dirAndName))
 			continue
 		}
 
 		if finfo.IsDir() {
-			log4go.Error(fmt.Sprintf("shell文件不存在，存在shell名称的文件夹:%s", filepath))
+			log4go.Error(fmt.Sprintf("shell文件不存在，存放shell的文件夹:%s", processStruct.dir))
 			continue
 		}
 
@@ -81,9 +80,9 @@ func main() {
 			subLen := processStruct.num - len(splitOut)
 
 			for i := 0; i < subLen; i++ {
-				log4go.Info(fmt.Sprintf("检测到进程不足，开始启动:%s", processName))
+				log4go.Info(fmt.Sprintf("检测到进程不足，开始启动:%s", processStruct.dirAndName))
 
-				startProcess(processName)
+				startProcess(processStruct.dirAndName)
 			}
 
 		} else {
@@ -95,7 +94,7 @@ func main() {
 					pid, err := strconv.Atoi(pid)
 
 					if err != nil {
-						log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processName, err))
+						log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processStruct.dirAndName, err))
 						continue
 					}
 
@@ -109,10 +108,10 @@ func main() {
 						err = killProcessStruct.Kill()
 
 						if err != nil {
-							log4go.Error(fmt.Sprintf("进程过多中，杀死进程失败%d,程序为:%s,错误代码:%s", pid, processName, err))
+							log4go.Error(fmt.Sprintf("进程过多中，杀死进程失败%d,程序为:%s,错误代码:%s", pid, processStruct.dirAndName, err))
 							continue
 						} else {
-							log4go.Info(fmt.Sprintf("进程过多中，杀死进程%d,程序为:%s", pid, processName))
+							log4go.Info(fmt.Sprintf("进程过多中，杀死进程%d,程序为:%s", pid, processStruct.dirAndName))
 						}
 
 						nowNum -= 1
@@ -128,31 +127,31 @@ func main() {
 				pid, err := strconv.Atoi(splitOut[0])
 
 				if err != nil {
-					log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processName, err))
+					log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processStruct.dirAndName, err))
 					continue
 				}
 
-				isNormal := startCheck(pid, processName)
+				isNormal := startCheck(pid, processStruct.dirAndName)
 
 				//不正常则需要重启进程
 				if !isNormal {
-					restartProcess(processName, pid)
+					restartProcess(processStruct.dirAndName, pid)
 				}
 			} else if len(splitOut) > 1 {
 				for _, pid := range splitOut {
 					pid, err := strconv.Atoi(pid)
 
 					if err != nil {
-						log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processName, err))
+						log4go.Error(fmt.Sprintf("pid参数转换异常%s,程序为%s,错误代码:%s", pid, processStruct.dirAndName, err))
 						continue
 					}
 
 					//首先检测进程是否运行正常
-					isNormal := startCheck(pid, processName)
+					isNormal := startCheck(pid, processStruct.dirAndName)
 
 					//不正常则需要重启进程
 					if !isNormal {
-						restartProcess(processName, pid)
+						restartProcess(processStruct.dirAndName, pid)
 					}
 				}
 			}
@@ -359,7 +358,7 @@ func getConfig() {
 
 			processName := strings.TrimSpace(key[nameLoc+1:])
 
-			processList[processName] = processStruct{dir, key, strings.TrimSpace(numAndLog[1]), int(intValue)}
+			processList[key] = processStruct{dir, key, processName, strings.TrimSpace(numAndLog[1]), int(intValue)}
 		}
 	}
 }
